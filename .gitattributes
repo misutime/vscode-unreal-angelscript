@@ -1,1 +1,3 @@
 extension/tests/fixtures/fixture-unformatted.as whitespace=-blank-at-eol
+language-server/pegjs/angelscript.pegjs text eol=lf
+language-server/pegjs/angelscript.js text eol=lf
