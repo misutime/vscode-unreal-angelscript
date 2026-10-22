@@ -8,6 +8,7 @@ import {
 import * as scriptfiles from './as_parser';
 import * as parsedcompletion from './parsed_completion';
 import * as typedb from './database';
+import { callbackDescription } from './member_callbacks';
 import * as specifiers from './specifiers';
 import { FormatFunctionDocumentation, FormatPropertyDocumentation } from './documentation';
 
@@ -302,6 +303,15 @@ export function GetHover(asmodule : scriptfiles.ASModule, position : Position) :
 
     let offset = asmodule.getOffset(position);
     let findSymbol = asmodule.getSymbolAt(offset);
+    const callback = asmodule.delegateBinds.find(binding => binding.memberCallback
+        && offset >= binding.statement.start_offset + binding.node_name.start
+        && offset <= binding.statement.start_offset + binding.node_name.end);
+    if (callback) {
+        const method = callback.resolveBoundFunction();
+        const delegate = typedb.GetTypeByName(callback.delegateType);
+        if (method && delegate?.delegateArgs) return { contents: { kind: 'markdown', value:
+            `\`void ${method.name}(${method.args.map(arg => arg.format()).join(', ')})\`\n\n${callbackDescription(delegate, method)}` } };
+    }
     if (!findSymbol)
     {
         // If there's no symbol below the cursor, try to provider a hover for the world under cursor
@@ -691,6 +701,11 @@ function GetHoverForProperty(type : typedb.DBType | typedb.DBNamespace, prop : t
 
     let hover = "";
     hover += FormatPropertyDocumentation(prop.documentation);
+    if (prop.fieldRole == "config") hover += "配置字段：业务方法只读。\n\n";
+    else if (prop.fieldRole == "state") hover += "内部运行状态。\n\n";
+    if (prop.macroSpecifiers?.has("Required")) hover += "必填配置：UE 数据验证检查最终对象引用。\n\n";
+    if (prop.fieldRole && prop.macroSpecifiers?.has("BlueprintReadOnly"))
+        hover += "蓝图只读；编译器自动建立私有字段的蓝图读取权限。\n\n";
     hover += "```angelscript_snippet\n"+prop.format(prefix)+"\n```";
 
     return <Hover> {contents: <MarkupContent> {
@@ -760,6 +775,30 @@ function AddScopeSymbols(asmodule : scriptfiles.ASModule, scope : scriptfiles.AS
 {
     if (!scope)
         return;
+    if (scope.scopetype == scriptfiles.ASScopeType.Implementation
+        || scope.scopetype == scriptfiles.ASScopeType.FieldSection)
+    {
+        const block: DocumentSymbol = {
+            name: scope.fieldRole ?? "impl " + (scope.dbtype?.name ?? "?")
+                + (scope.declaration.ast.documentation
+                    ? " · " + typedb.FormatDocumentationComment(scope.declaration.ast.documentation).split("\n")[0].trim() : ""),
+            kind: SymbolKind.Namespace,
+            range: asmodule.getRange(scope.declaration.start_offset, scope.end_offset),
+            selectionRange: asmodule.getRange(scope.declaration.start_offset, scope.start_offset),
+            children: [],
+        };
+        for (const variable of scope.variables)
+            block.children.push({
+                name: variable.name,
+                kind: SymbolKind.Field,
+                range: asmodule.getRange(variable.start_offset_type, variable.end_offset_name),
+                selectionRange: asmodule.getRange(variable.start_offset_name, variable.end_offset_name),
+            });
+        for (const child of scope.scopes)
+            AddScopeSymbols(asmodule, child, block.children);
+        symbols.push(block);
+        return;
+    }
     if (scope.scopetype == scriptfiles.ASScopeType.Class
         || scope.scopetype == scriptfiles.ASScopeType.Global
         || scope.scopetype == scriptfiles.ASScopeType.Namespace
@@ -882,7 +921,8 @@ function AddScopeSymbols(asmodule : scriptfiles.ASModule, scope : scriptfiles.AS
 
         if (scope.scopetype == scriptfiles.ASScopeType.Function)
         {
-            if (scope.parentscope && scope.parentscope.scopetype == scriptfiles.ASScopeType.Class)
+            if (scope.parentscope && (scope.parentscope.scopetype == scriptfiles.ASScopeType.Class
+                || scope.parentscope.scopetype == scriptfiles.ASScopeType.Implementation))
                 scopeSymbol.kind = SymbolKind.Method;
             else
                 scopeSymbol.kind = SymbolKind.Function;

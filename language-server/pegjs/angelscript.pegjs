@@ -163,14 +163,15 @@ op_unary
     / @"~" !"="
 
 global_declaration
-    = delegate_decl
+    = implementation_decl
+    / delegate_decl
     / event_decl
     / struct_decl
     / class_decl
     / enum_decl
     / namespace_decl
     / asset_decl
-    / macro:(@ufunction_macro _)? scope:(@("mixin" / "local") _)? decl:function_signature
+    / macro:(@ufunction_macro _)? scope:(@("mixin" / "local" / "export") _)? decl:function_signature
         {
             decl.macro = macro;
             decl.scoping = scope;
@@ -180,7 +181,8 @@ global_declaration
     / incomplete_var_decl
 
 class_declaration
-    = access_decl
+    = field_section_decl
+    / access_decl
     / constructor_decl
     / destructor_decl
     / class_method_decl
@@ -979,6 +981,7 @@ keyword
     )
     / &"e" @(
         "event"
+        / "export"
         / "enum"
         / "else"
     )
@@ -1313,6 +1316,22 @@ struct_decl
         let node = Compound(range(), n.StructDefinition, null);
         node.name = name;
         node.macro = macro;
+        return node;
+    }
+
+implementation_decl
+    = &{ return options.precedesBlock; } "impl" __ name:identifier _
+    {
+        let node = Compound(range(), n.ImplementationDefinition, null);
+        node.name = name;
+        return node;
+    }
+
+field_section_decl
+    = &{ return options.precedesBlock; } role:("config" / "state") ![A-Za-z0-9_] _
+    {
+        let node = Compound(range(), n.FieldSectionDefinition, null);
+        node.role = role;
         return node;
     }
 

@@ -48,7 +48,7 @@ export let ASKeywords = [
     "for", "if", "enum", "return", "continue", "break", "class", "struct", "default",
     "void", "const", "delegate", "event", "else", "while", "case", "Cast", "namespace",
     "UFUNCTION", "UPROPERTY", "UCLASS", "USTRUCT", "nullptr", "true", "false", "this", "auto",
-    "final", "property", "override", "mixin", "switch", "fallthrough",
+    "final", "property", "override", "mixin", "export", "switch", "fallthrough", "config", "state", "impl",
 ];
 
 export enum ASScopeType
@@ -60,6 +60,8 @@ export enum ASScopeType
     Code,
     Namespace,
     LiteralAsset,
+    Implementation,
+    FieldSection,
 }
 
 export class ASModule
@@ -446,6 +448,8 @@ export class ASScope extends ASElement
     dbtype : typedb.DBType = null;
     dbfunc : typedb.DBMethod = null;
     assettype : string | null = null;
+    fieldRole : "config" | "state" | null = null;
+    structuralError : string | null = null;
 
     resolvedNamespace : typedb.DBNamespace = null;
     available_global_types : Array<typedb.DBType> = null;
@@ -644,6 +648,7 @@ export class ASStatement extends ASElement
 
 export class ASDelegateBind
 {
+	memberCallback : boolean = false;
     statement : ASStatement = null;
     scope : ASScope = null;
     delegateType : string = null;
@@ -657,6 +662,8 @@ export class ASDelegateBind
     {
         if (!this.node_name)
             return null;
+        else if (this.memberCallback)
+            return this.node_name.value;
         else if (this.node_name.type == node_types.ConstName)
             return this.node_name.value.substring(2, this.node_name.value.length-1);
         else if (this.node_name.type == node_types.ConstString)
@@ -841,6 +848,9 @@ export function ResolveModule(module : ASModule)
     if (module.resolved)
         return;
 
+    module.semanticSymbols = [];
+    module.delegateBinds = [];
+    module.annotatedFunctionCalls = [];
     while (!module.resolved)
     {
         module.resolved = true;
@@ -886,6 +896,8 @@ export function ResolveModule(module : ASModule)
         if (!module.resolved)
         {
             module.semanticSymbols = [];
+            module.delegateBinds = [];
+            module.annotatedFunctionCalls = [];
             module.moduleDependencies.clear();
         }
     }
@@ -1192,7 +1204,7 @@ function LoadModule(module : ASModule)
 
 // Use regex to lift out types, namespaces and global functions so resolve can find them later
 let re_preparse_type = /\s*(class|struct|namespace|enum)\s+([A-Za-z0-9_]+)(\s*:\s*([A-Za-z0-9_]+))?\s*\{/g;
-let re_preparse_function = /(\n|^)[ \t]*((mixin|delegate|event)[ \t]+)?((const[ \t]+)?([A-Za-z_0-9]+(\<[A-Za-z0-9_]+(,\s*[A-Za-z0-9_]+)*\>)?)([ \t]*&)?)[\t ]+([A-Za-z0-9_]+)\(((.|\n|\r)*?)\)/g;
+let re_preparse_function = /(\n|^)[ \t]*((mixin|delegate|event|local|export)[ \t]+)?((const[ \t]+)?([A-Za-z_0-9]+(\<[A-Za-z0-9_]+(,\s*[A-Za-z0-9_]+)*\>)?)([ \t]*&)?)[\t ]+([A-Za-z0-9_]+)\(((.|\n|\r)*?)\)/g;
 function PreParseTypes(module : ASModule)
 {
     module.preParsedIdentifiers = [];
@@ -1751,6 +1763,9 @@ function AddVarDeclToScope(scope : ASScope, statement : ASStatement, vardecl : a
         asvar.end_offset_expression = statement.start_offset + vardecl.expression.end;
     }
 
+    if (!vardecl.access && scope.fieldRole)
+        asvar.isPrivate = true;
+
     if (vardecl.access)
     {
         if (vardecl.access.value == "private")
@@ -1782,6 +1797,7 @@ function AddVarDeclToScope(scope : ASScope, statement : ASStatement, vardecl : a
         dbprop.isPrivate = asvar.isPrivate;
         dbprop.isProtected = asvar.isProtected;
         dbprop.accessSpecifier = asvar.accessSpecifier;
+        dbprop.fieldRole = scope.fieldRole;
 
         // Add macro specifiers if we had any
         if (vardecl.macro)
@@ -1861,6 +1877,33 @@ function GenerateTypeInformation(scope : ASScope)
             ExtendScopeToStatement(scope, scope.previous);
             dbtype.moduleScopeStart = scope.start_offset;
             dbtype.moduleScopeEnd = scope.end_offset;
+        }
+        // 实现块引用已有类型，不创建第二份类或第二个模块拥有者。
+        else if (scope.previous.ast.type == node_types.ImplementationDefinition)
+        {
+            scope.declaration = scope.previous;
+            const definition = scope.previous.ast;
+            const target = typedb.LookupType(scope.getNamespace(), definition.name.value);
+            if (!target || target.isStruct || target.declaredModule != scope.module.modulename
+                || target.namespace != scope.getNamespace() || target.moduleOffset >= scope.previous.start_offset)
+            {
+                scope.structuralError = "impl requires a preceding script class in the same file and namespace";
+                return;
+            }
+            scope.dbtype = target;
+            target.isStructuredClass = true;
+        }
+        else if (scope.previous.ast.type == node_types.FieldSectionDefinition)
+        {
+            scope.declaration = scope.previous;
+            scope.fieldRole = scope.previous.ast.role;
+            scope.dbtype = scope.parentscope?.dbtype ?? null;
+            if (scope.parentscope?.scopetype != ASScopeType.Class || !scope.dbtype || scope.dbtype.isStruct)
+            {
+                scope.structuralError = "config/state sections require a script class";
+                return;
+            }
+            scope.dbtype.isStructuredClass = true;
         }
         // Struct definition in global scope
         else if (scope.previous.ast.type == node_types.StructDefinition)
@@ -2042,6 +2085,11 @@ function GenerateTypeInformation(scope : ASScope)
                     dbfunc.isMixin = true;
                 else if (funcdef.scoping == "local")
                     dbfunc.isLocal = true;
+                else if (funcdef.scoping == "export")
+                {
+                    dbfunc.isExported = true;
+                    dbfunc.isLocal = true;
+                }
             }
 
             // Figure out whether there is any code in this function
@@ -2081,6 +2129,27 @@ function GenerateTypeInformation(scope : ASScope)
             ExtendScopeToStatement(scope, scope.previous);
             dbfunc.moduleScopeStart = scope.previous.start_offset + funcdef.name.start;
             dbfunc.moduleScopeEnd = scope.end_offset;
+            if (dbfunc.isExported && !dbfunc.containingType && dbfunc.namespace.isRootNamespace())
+            {
+                let decl = new typedb.DBNamespaceDeclaration();
+                decl.declaredModule = scope.module.modulename;
+                decl.declaredOffset = dbfunc.moduleOffset;
+                decl.declaredOffsetEnd = dbfunc.moduleOffsetEnd;
+                decl.scopeOffsetStart = scope.start_offset;
+                decl.scopeOffsetEnd = scope.end_offset;
+                let globalNamespace = typedb.DeclareNamespace(typedb.GetRootNamespace(), 'Global', decl);
+                scope.module.namespaces.push(globalNamespace);
+                for (let existing of globalNamespace.findSymbols(dbfunc.name, typedb.DBAllowSymbol.Functions))
+                {
+                    if (existing instanceof typedb.DBMethod && existing.isExported && existing.declaredModule == dbfunc.declaredModule)
+                        globalNamespace.removeSymbol(existing);
+                }
+                let alias = Object.assign(new typedb.DBMethod(), dbfunc);
+                alias.isLocal = false;
+                alias.isGlobalExportAlias = true;
+                globalNamespace.addSymbol(alias);
+                scope.module.globalSymbols.push(alias);
+            }
         }
         // Constructor declaration placed inside a class
         else if (scope.previous.ast.type == node_types.ConstructorDecl)
@@ -4324,9 +4393,12 @@ function DetectNodeSymbols(scope : ASScope, statement : ASStatement, node : any,
         {
             if (node.children)
             {
-                for (let child of node.children)
+                for (let [index, child] of node.children.entries())
                 {
                     parseContext.argumentFunction = outerArgumentFunction;
+                    const argument = outerArgumentFunction?.args[index];
+                    const expected = argument && typedb.LookupType(scope.getNamespace(), argument.typename);
+                    if (DetectMemberCallback(scope, statement, child, expected, parseContext)) continue;
                     DetectNodeSymbols(scope, statement, child, parseContext);
                 }
             }
@@ -4360,6 +4432,7 @@ function DetectNodeSymbols(scope : ASScope, statement : ASStatement, node : any,
         case node_types.UnaryOperation:
         {
             // Detect symbols in the left expression
+            parseContext.isWriteAccess = node.operator == "++" || node.operator == "--";
             let left_symbol = DetectNodeSymbols(scope, statement, node.children[0], parseContext, typedb.DBAllowSymbol.Properties);
             return ResolveTypeFromOperator(scope, GetTypeFromSymbol(left_symbol), null, getUnaryOperatorOverloadMethod(node.operator));
         }
@@ -4368,6 +4441,7 @@ function DetectNodeSymbols(scope : ASScope, statement : ASStatement, node : any,
         case node_types.PostfixOperation:
         {
             // Detect symbols in the left expression
+            parseContext.isWriteAccess = true;
             let left_symbol = DetectNodeSymbols(scope, statement, node.children[0], parseContext, typedb.DBAllowSymbol.Properties);
             return ResolveTypeFromOperator(scope, GetTypeFromSymbol(left_symbol), null, getPostfixOperatorOverloadMethod(node.operator));
         }
@@ -4588,7 +4662,7 @@ function DetectNodeSymbols(scope : ASScope, statement : ASStatement, node : any,
                 let insideType = scope.dbtype ? scope.dbtype.name : null;
                 let symType = ASSymbolType.LocalVariable;
 
-                if (scope.dbtype && scope.scopetype == ASScopeType.Class)
+                if (scope.dbtype && (scope.scopetype == ASScopeType.Class || scope.scopetype == ASScopeType.FieldSection))
                 {
                     symType = ASSymbolType.MemberVariable;
                 }
@@ -4640,6 +4714,7 @@ function DetectNodeSymbols(scope : ASScope, statement : ASStatement, node : any,
                 }
                 else
                 {
+                    if (DetectMemberCallback(scope, statement, node.expression, variableType, parseContext)) break;
                     let expressionType = DetectNodeSymbols(scope, statement, node.expression, parseContext, typedb.DBAllowSymbol.Properties);
 
                     // If this was an auto, we should update the typename symbol to match the expression
@@ -4731,6 +4806,14 @@ function DetectNodeSymbols(scope : ASScope, statement : ASStatement, node : any,
         case node_types.Assignment:
         case node_types.CompoundAssignment:
         {
+            if (node.type == node_types.Assignment) {
+                const expected = ResolveTypeFromExpression(scope, node.children[0]);
+                if (DetectMemberCallback(scope, statement, node.children[1], expected, parseContext)) {
+                    parseContext.isWriteAccess = true;
+                    DetectNodeSymbols(scope, statement, node.children[0], parseContext, typedb.DBAllowSymbol.Properties);
+                    break;
+                }
+            }
             // Detect in each subexpression
             for (let i = 0, count = node.children.length; i < count; ++i)
             {
@@ -4807,6 +4890,13 @@ function DetectNodeSymbols(scope : ASScope, statement : ASStatement, node : any,
                 }
             }
         }
+        break;
+        case node_types.ImplementationDefinition:
+        {
+            AddTypenameSymbol(scope, statement, { name: node.name });
+        }
+        break;
+        case node_types.FieldSectionDefinition:
         break;
         case node_types.StructDefinition:
         {
@@ -5175,6 +5265,31 @@ function DetectSymbolFromNamespacedIdentifier(scope : ASScope, statement : ASSta
     return true;
 }
 
+function DetectMemberCallback(scope: ASScope, statement: ASStatement, node: any, expected: typedb.DBType, context: ASParseContext): boolean
+{
+    if (!expected?.isDelegate || node?.type != node_types.MemberAccess || !node.children[1]) return false;
+    const owner = ResolveTypeFromExpression(scope, node.children[0]);
+    if (owner?.findFirstSymbol(node.children[1].value, typedb.DBAllowSymbol.Properties)) return false;
+    const getter = owner?.findFirstSymbol('Get' + node.children[1].value, typedb.DBAllowSymbol.Functions);
+    if (getter instanceof typedb.DBMethod && getter.isProperty) return false;
+    const binding = new ASDelegateBind;
+    binding.memberCallback = true;
+    binding.scope = scope;
+    binding.statement = statement;
+    binding.delegateType = expected.name;
+    binding.node_expression = node;
+    binding.node_object = node.children[0];
+    binding.node_name = node.children[1];
+    scope.module.delegateBinds.push(binding);
+    DetectNodeSymbols(scope, statement, node.children[0], context, typedb.DBAllowSymbol.Properties);
+    const method = owner?.findFirstSymbol(node.children[1].value, typedb.DBAllowSymbol.Functions);
+    if (method instanceof typedb.DBMethod) {
+        AddIdentifierSymbol(scope, statement, node.children[1], ASSymbolType.MemberFunction, method.containingType.name, method.name);
+        scope.module.markDependencyType(method.containingType);
+    }
+    return true;
+}
+
 function DetectSymbolFromDelegateBindFunctionName(scope : ASScope, statement : ASStatement, parseContext : ASParseContext, delegateBind : ASDelegateBind)
 {
     let insideType = ResolveTypeFromExpression(scope, delegateBind.node_object);
@@ -5363,7 +5478,7 @@ function DetectSymbolsInType(scope : ASScope, statement : ASStatement, inSymbol 
         else
             symType = ASSymbolType.MemberFunction;
 
-        AddIdentifierSymbol(scope, statement, node, symType, usedSymbol.containingType, usedSymbol.name);
+        AddIdentifierSymbol(scope, statement, node, symType, usedSymbol.containingType, usedSymbol.name, parseContext.isWriteAccess);
         scope.module.markDependencySymbol(usedSymbol);
         return usedSymbol;
     }
@@ -5940,7 +6055,11 @@ function DetermineScopeType(scope : ASScope)
         if (scope.previous.ast)
         {
             let ast_type = scope.previous.ast.type;
-            if (ast_type == node_types.ClassDefinition)
+            if (ast_type == node_types.ImplementationDefinition)
+                scope.scopetype = ASScopeType.Implementation;
+            else if (ast_type == node_types.FieldSectionDefinition)
+                scope.scopetype = ASScopeType.FieldSection;
+            else if (ast_type == node_types.ClassDefinition)
             {
                 scope.scopetype = ASScopeType.Class;
             }
@@ -6341,6 +6460,8 @@ export function ParseStatement(scopetype : ASScopeType, statement : ASStatement,
             startRule = "start_global";
         break;
         case ASScopeType.Class:
+        case ASScopeType.Implementation:
+        case ASScopeType.FieldSection:
             startRule = "start_class";
         break;
         case ASScopeType.Enum:

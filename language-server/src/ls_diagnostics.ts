@@ -1,6 +1,7 @@
 import { Diagnostic, DiagnosticSeverity, DiagnosticTag, Position } from 'vscode-languageserver/node';
 import * as typedb from './database';
 import * as scriptfiles from './as_parser';
+import { callbackError } from './member_callbacks';
 
 let node_types = require("../grammar/node_types.js");
 
@@ -80,6 +81,7 @@ export function UpdateScriptModuleDiagnostics(asmodule : scriptfiles.ASModule, i
 
     // Add diagnostics for delegate function bind verification
     VerifyDelegateBinds(asmodule, diagnostics);
+    diagnostics.push(...GetStructuredClassDiagnostics(asmodule));
 
     // Add diagnostics for variables that don't confirm to the naming convention
     AddNamingConventionDiagnostics(asmodule, diagnostics);
@@ -160,6 +162,27 @@ function VerifyDelegateBinds(asmodule : scriptfiles.ASModule, diagnostics : Arra
             continue;
         if (!delegateBind.node_object)
             continue;
+        if (delegateBind.memberCallback) {
+            const owner = delegateBind.scope.getParentType();
+            const method = owner?.findFirstSymbol(delegateBind.getFunctionName(), typedb.DBAllowSymbol.Functions);
+            const delegate = typedb.GetTypeByName(delegateBind.delegateType);
+            let error = delegateBind.node_object.type != node_types.This ? '成员回调仅支持显式 this.Method' :
+                callbackError(delegate, method instanceof typedb.DBMethod ? method : null, owner);
+            if (!error && delegateBind.scope.getParentFunction()?.isConst && method instanceof typedb.DBMethod && !method.isConst)
+                error = 'const 方法不能绑定非 const 回调';
+            const functionScope = delegateBind.scope.getParentFunctionScope();
+            if (!error && (functionScope?.declaration?.ast?.type == node_types.ConstructorDecl
+                || !functionScope || delegateBind.scope.getParentFunction()?.isDefaultsOnly))
+                error = '构造和默认初始化期间不能绑定成员回调';
+            if (error) diagnostics.push({ severity: DiagnosticSeverity.Error,
+                range: asmodule.getRange(delegateBind.statement.start_offset + delegateBind.node_expression.start,
+                    delegateBind.statement.start_offset + delegateBind.node_expression.end),
+                message: error, source: 'angelscript',
+                data: !method && delegate?.isUnrealType() && delegate.delegateReturn == 'void'
+                    && delegateBind.node_object.type == node_types.This ? { type: 'delegateBind',
+                        delegate: delegate.name, name: delegateBind.getFunctionName() } : undefined });
+            continue;
+        }
         if (asmodule.isEditingNode(delegateBind.statement, delegateBind.node_object))
             continue;
 
@@ -812,4 +835,119 @@ function AddScopeNamingConventionDiagnostics(scope : scriptfiles.ASScope, diagno
 
     for (let subscope of scope.scopes)
         AddScopeNamingConventionDiagnostics(subscope, diagnostics);
+}
+// 离线诊断覆盖直接写入和声明组织；完整引用与绑定检查仍由引擎编译器负责。
+export function GetStructuredClassDiagnostics(module: scriptfiles.ASModule): Array<Diagnostic>
+{
+    const diagnostics: Array<Diagnostic> = [];
+    const report = (scope: scriptfiles.ASScope, message: string) => diagnostics.push({
+        severity: DiagnosticSeverity.Error,
+        range: module.getRange(scope.declaration?.start_offset ?? scope.start_offset, scope.start_offset),
+        message,
+        source: "angelscript",
+    });
+    const visit = (scope: scriptfiles.ASScope) => {
+        if (scope.structuralError) report(scope, scope.structuralError);
+        if (scope.scopetype == scriptfiles.ASScopeType.Class && scope.dbtype?.isStructuredClass)
+        {
+            const roles = new Set<string>();
+            for (const child of scope.scopes)
+            {
+                if (child.fieldRole)
+                {
+                    if (roles.has(child.fieldRole)) report(child, "A class may declare each field section only once");
+                    roles.add(child.fieldRole);
+                }
+                if (child.scopetype == scriptfiles.ASScopeType.Function)
+                    report(child, "Structured class methods must be declared in impl blocks");
+            }
+            for (const variable of scope.variables)
+            {
+                const property = scope.dbtype.findFirstSymbol(variable.name, typedb.DBAllowSymbol.Properties);
+                if (!(property instanceof typedb.DBProperty) || !property.macroSpecifiers
+                    || !["DefaultComponent", "OverrideComponent", "BindComponent"].some(name => property.macroSpecifiers.has(name)))
+                    report(scope, "Structured class field " + variable.name + " must be declared in config or state");
+            }
+        }
+        if (scope.scopetype == scriptfiles.ASScopeType.Class || scope.scopetype == scriptfiles.ASScopeType.FieldSection)
+        {
+            for (const variable of scope.variables)
+            {
+                const symbol = scope.dbtype?.findFirstSymbol(variable.name, typedb.DBAllowSymbol.Properties);
+                if (!(symbol instanceof typedb.DBProperty)) continue;
+                const specs = new Map(Array.from(symbol.macroSpecifiers ?? []).map(([name, value]) => [name.toLowerCase(), value]));
+                if (specs.has("required"))
+                {
+                    if (scope.fieldRole != "config" || specs.get("required"))
+                        report(scope, "Required is only allowed on config properties and takes no value");
+                    const type = typedb.GetTypeByName(symbol.typename);
+                    if (/^(TArray|TMap|TSet|TWeakObjectPtr|TSoftObjectPtr|TSubclassOf)\s*</.test(symbol.typename)
+                        || type && (!type.inheritsFrom("UObject") || type.inheritsFrom("AActor")
+                            || type.inheritsFrom("UActorComponent") || type.inheritsFrom("UClass")))
+                        report(scope, "Required config must be a hard UObject reference, excluding actors, components and class references");
+                }
+                if (symbol.macroMeta?.has("angelscriptrequired"))
+                    report(scope, "AngelscriptRequired is reserved metadata; declare UPROPERTY(Required) instead");
+                const privateAccess = symbol.macroMeta?.get("allowprivateaccess");
+                if (scope.fieldRole && specs.has("blueprintreadonly")
+                    && privateAccess !== undefined && privateAccess.toLowerCase() != "true")
+                    report(scope, "BlueprintReadOnly on config/state conflicts with AllowPrivateAccess=false");
+            }
+        }
+        if (scope.scopetype == scriptfiles.ASScopeType.Implementation)
+        {
+            if (scope.variables.length) report(scope, "impl blocks may contain only member methods");
+            for (const statement of scope.statements)
+                if (statement?.ast && statement.ast.type != node_types.FunctionDecl)
+                    report(scope, "impl blocks may contain only member methods");
+            for (const child of scope.scopes)
+            {
+                if (child.scopetype != scriptfiles.ASScopeType.Function)
+                    report(child, "impl blocks may contain only member methods");
+                const declaration = child.declaration?.ast;
+                if (declaration?.type == node_types.ConstructorDecl || declaration?.type == node_types.DestructorDecl
+                    || child.dbfunc?.name.startsWith("__Init"))
+                    report(child, "Constructors, destructors and reserved initializers are not allowed in impl blocks");
+            }
+        }
+        if (scope.scopetype == scriptfiles.ASScopeType.FieldSection)
+        {
+            if (scope.scopes.length) report(scope, "Field sections may contain only property declarations");
+            for (const statement of scope.statements)
+                if (statement?.ast && statement.ast.type != node_types.VariableDecl && statement.ast.type != node_types.VariableDeclMulti)
+                    report(scope, "Field sections may contain only property declarations");
+            for (const property of scope.variables)
+            {
+                const symbol = scope.dbtype?.findFirstSymbol(property.name, typedb.DBAllowSymbol.Properties);
+                if (!(symbol instanceof typedb.DBProperty)) continue;
+                const specs = new Set(Array.from(symbol.macroSpecifiers?.keys() ?? []).map(name => name.toLowerCase()));
+                if (specs.has("blueprintreadwrite") || specs.has("blueprintsetter"))
+                    report(scope, "Blueprint writable properties conflict with config/state field roles");
+                if (scope.fieldRole == "state" && ["editanywhere", "editdefaultsonly", "editinstanceonly"].some(name => specs.has(name)))
+                    report(scope, "state fields cannot be editor configuration");
+                if (scope.fieldRole == "config" && ["replicated", "replicatedusing", "interp", "instanced", "exposeonspawn"].some(name => specs.has(name)))
+                    report(scope, "Runtime writable specifiers conflict with config field roles");
+                if (["defaultcomponent", "overridecomponent", "bindcomponent"].some(name => specs.has(name)))
+                    report(scope, "Component declarations must remain directly in the class body");
+            }
+        }
+        for (const child of scope.scopes) visit(child);
+    };
+    if (module.rootscope) visit(module.rootscope);
+    for (const symbol of module.semanticSymbols)
+    {
+        if (!symbol.isWriteAccess || symbol.type != scriptfiles.ASSymbolType.MemberVariable) continue;
+        const scope = module.getScopeAt(symbol.start);
+        if (!scope?.isInFunctionBody()) continue;
+        const type = typedb.GetTypeByName(symbol.container_type);
+        const property = type?.findFirstSymbol(symbol.symbol_name, typedb.DBAllowSymbol.Properties);
+        if (property instanceof typedb.DBProperty && property.fieldRole == "config")
+            diagnostics.push({
+                severity: DiagnosticSeverity.Error,
+                range: module.getRange(symbol.start, symbol.end),
+                message: "Configuration fields cannot be written from business methods",
+                source: "angelscript",
+            });
+    }
+    return diagnostics;
 }

@@ -2,6 +2,7 @@
     "name": "angelscript",
     "scopeName": "source.angelscript",
     "patterns": [
+        {"name": "keyword.control.structured.angelscript", "match": "\\b(?:config|state)(?=\\s*\\{)|\\bimpl(?=\\s+[A-Za-z_]\\w*\\s*\\{)"},
         {
             "name": "keyword.declaration.angelscript",
             "match": "\\b(class|struct|delegate|event|import|enum|namespace)\\b"
@@ -12,7 +13,7 @@
         },
         {
             "name": "keyword.type.angelscript",
-            "match": "\\b(void|auto|const|property|final|override|mixin|local)\\b"
+            "match": "\\b(void|auto|const|property|final|override|mixin|local|export)\\b"
         },
         {
             "name": "keyword.code.angelscript",

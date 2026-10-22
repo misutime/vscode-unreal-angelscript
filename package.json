@@ -1,16 +1,17 @@
 {
     "name": "unreal-angelscript",
-    "displayName": "Unreal Angelscript",
-    "description": "Language Server and Debug Adapter for use with the UnrealEngine-Angelscript plugin from https://github.com/Hazelight/UnrealEngine-Angelscript",
-    "version": "1.9.4",
-    "publisher": "Hazelight",
+    "displayName": "Unreal AngelScript (Misutime)",
+    "description": "Language support, debugging and formatting for the Misutime Unreal AngelScript engine.",
+    "version": "1.13.0",
+    "publisher": "misutime",
     "icon": "resources/angelscript_unreal.png",
     "engines": {
-        "vscode": "^1.65.0"
+        "vscode": "^1.108.1"
     },
     "categories": [
         "Programming Languages",
-        "Debuggers"
+        "Debuggers",
+        "Formatters"
     ],
     "activationEvents": [
         "onDebug",
@@ -18,7 +19,7 @@
     ],
     "repository": {
         "type": "git",
-        "url": "https://github.com/Hazelight/vscode-unreal-angelscript"
+        "url": "https://github.com/misutime/vscode-unreal-angelscript"
     },
     "main": "./extension/dist/extension.js",
     "contributes": {
@@ -460,6 +461,22 @@
                             }
                         }
                     }
+                },
+                "UnrealAngelscript.formatting.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "scope": "resource",
+                    "description": "Enable the integrated AngelScript formatter."
+                },
+                "unreal-angelscript-clang-format.executable": {
+                    "type": "string",
+                    "scope": "resource",
+                    "description": "Path to a custom clang-format executable, absolute or relative to the workspace."
+                },
+                "unreal-angelscript-clang-format.style": {
+                    "type": "string",
+                    "scope": "resource",
+                    "description": "Path to a .clang-format style file, absolute or relative to the workspace."
                 }
             }
         },
@@ -502,7 +519,20 @@
         ],
         "configurationDefaults": {
             "[angelscript]": {
-                "editor.tabSize": 4
+                "editor.defaultFormatter": "misutime.unreal-angelscript",
+                "editor.semanticHighlighting.enabled": true
+            },
+            "editor.semanticTokenColorCustomizations": {
+                "rules": {
+                    "as_config_field:angelscript": "#D7BA7D",
+                    "as_state_field:angelscript": "#4EC9B0"
+                },
+                "[*Light*]": {
+                    "rules": {
+                        "as_config_field:angelscript": "#865500",
+                        "as_state_field:angelscript": "#006D62"
+                    }
+                }
             }
         },
         "breakpoints": [
@@ -586,6 +616,11 @@
                 "title": "Unreal: Resume Execution and Stop Any Active PIE Sessions",
                 "shortTitle": "Resume and Stop PIE",
                 "icon": "resources/stop_pie.png"
+            },
+            {
+                "command": "unreal-angelscript-clang-format.generate-config-file",
+                "category": "Unreal AngelScript (Misutime)",
+                "title": "Generate Formatting Config"
             }
         ],
         "menus": {
@@ -608,6 +643,18 @@
                 "command": "angelscript.goToSymbol",
                 "key": "alt+g",
                 "when": "editorTextFocus"
+            }
+        ],
+        "semanticTokenTypes": [
+            {
+                "id": "as_config_field",
+                "superType": "property",
+                "description": "配置字段，业务方法只读。"
+            },
+            {
+                "id": "as_state_field",
+                "superType": "property",
+                "description": "内部运行状态字段。"
             }
         ],
         "semanticTokenScopes": [
@@ -650,6 +697,12 @@
                     "as_member_variable": [
                         "variable.other.property.angelscript"
                     ],
+                    "as_config_field": [
+                        "variable.other.property.config.angelscript"
+                    ],
+                    "as_state_field": [
+                        "variable.other.property.state.angelscript"
+                    ],
                     "as_member_accessor": [
                         "variable.other.property.accessor.angelscript"
                     ],
@@ -680,14 +733,24 @@
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",
-        "compile": "npm run compile:extension && npm run compile:language-server",
+        "compile": "npm run pegjs:compile && npm run compile:extension && npm run compile:language-server",
         "compile:extension": "cd extension && node esbuild.js",
         "compile:language-server": "cd language-server && node esbuild.js",
         "watch": "npm-run-all -p watch:*",
         "watch:extension": "cd extension && node esbuild.js --watch",
         "watch:language-server": "cd language-server && node esbuild.js --watch",
-        "postinstall": "cd extension && npm install && cd ../language-server && npm install && cd ..",
+        "postinstall": "cd extension && npm ci && cd ../language-server && npm ci && cd ..",
         "pegjs:compile": "cd language-server/pegjs && peggy angelscript.pegjs --allowed-start-rules start,start_global,start_class,start_enum",
-        "pegjs:test": "cd language-server/pegjs && peggy angelscript.pegjs --allowed-start-rules start,start_global,start_class,start_enum --trace --test-file test.as -S start"
+        "pegjs:test": "cd language-server/pegjs && peggy angelscript.pegjs --allowed-start-rules start,start_global,start_class,start_enum --trace --test-file test.as -S start",
+        "test": "npm run test:language && npm run test:formatting",
+        "typecheck": "cd extension && tsc --noEmit --skipLibCheck && cd ../language-server && tsc --noEmit --skipLibCheck",
+        "package:local": "node -e \"require('fs').mkdirSync('dist', {recursive: true})\" && vsce package --out dist/unreal-angelscript-misutime.vsix",
+        "test:language": "node language-server/tests/global-export.test.js && node language-server/tests/structured-class.test.js && node language-server/tests/field-role.test.js && node language-server/tests/member-callback.test.js && node language-server/tests/config-roles.test.js",
+        "test:formatting": "node extension/tests/run-formatting-tests.js"
+    },
+    "devDependencies": {
+        "@vscode/vsce": "4.0.0",
+        "peggy": "5.1.0",
+        "npm-run-all": "4.1.5"
     }
 }

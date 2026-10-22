@@ -7,3 +7,9 @@ extension/out/**
 language-server/node_modules/**
 language-server/out/**
 node_modules/**
+dist/**
+language-server/tests/**
+package-lock.json
+AGENTS.md
+extension/tests/**
+!extension/node_modules/clang-format-node/**

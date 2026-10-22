@@ -47,6 +47,7 @@ import * as typehierarchy from './type_hierarchy';
 import * as api_docs from './api_docs';
 import * as fs from 'fs';
 import {glob} from 'glob';
+import type {IOptions} from 'glob';
 
 import {
     Message, MessageType, readMessages, buildGoTo,
@@ -339,7 +340,7 @@ connection.onInitialize((_params): InitializeResult => {
     let GlobsRemaining = Roots.length;
     for (let RootPath of Roots)
     {
-        let globOptions: glob.IOptions = {
+        let globOptions: IOptions = {
             ignore: settings?.scriptIgnorePatterns || []
         };
         glob(RootPath + "/**/*.as", globOptions, function (err: any, files: any)

@@ -2,6 +2,7 @@
 export let ASPropertySpecifiers : any = {
     "BlueprintReadWrite": "Allow the property to be read and written from blueprint nodes",
     "BlueprintReadOnly": "Allow the property to be read from blueprint but not written",
+    "Required": "config 的 UObject 硬引用必须配置；UE 数据验证检查蓝图继承后的最终值，不自动加载或填充",
     "BlueprintHidden": "Do not make this property available to blueprint at all",
     "EditInstanceOnly": "Property can only be changed on instances in the level",
     "EditDefaultsOnly": "Property can only be changed on defaults inside blueprint classes",

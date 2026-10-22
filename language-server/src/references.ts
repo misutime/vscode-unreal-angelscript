@@ -3,6 +3,32 @@ import * as typedb from './database';
 
 import { Range, Position, Location, TextEdit, ResponseError } from "vscode-languageserver";
 
+function GetGlobalExport(asmodule : scriptfiles.ASModule, symbol : scriptfiles.ASSemanticSymbol) : typedb.DBMethod
+{
+    if (symbol.type != scriptfiles.ASSymbolType.GlobalFunction)
+        return null;
+    let namespace = typedb.LookupNamespace(null, symbol.container_type);
+    if (!namespace)
+        return null;
+    for (let method of namespace.findSymbols(symbol.symbol_name, typedb.DBAllowSymbol.Functions))
+    {
+        if (method instanceof typedb.DBMethod && method.isExported
+            && (method.isGlobalExportAlias || method.declaredModule == asmodule.modulename))
+            return method;
+    }
+    return null;
+}
+
+function MatchesGlobalExport(method : typedb.DBMethod, asmodule : scriptfiles.ASModule, symbol : scriptfiles.ASSemanticSymbol) : boolean
+{
+    if (symbol.type != scriptfiles.ASSymbolType.GlobalFunction || symbol.symbol_name != method.name)
+        return false;
+    // 本地名称与 Global 入口属于同一函数，其他模块的同名私有函数不属于它。
+    let namespace = typedb.LookupNamespace(null, symbol.container_type);
+    return namespace && (namespace.getQualifiedNamespace() == "Global"
+        || (namespace.isRootNamespace() && asmodule.modulename == method.declaredModule));
+}
+
 export function* FindReferences(uri : string, position : Position) : any
 {
     let references = new Array<Location>();
@@ -77,6 +103,9 @@ export function* FindReferences(uri : string, position : Position) : any
     // If we're looking for a method, we should also include any overrides from derived types
     let searchForTypes = new Set<string>();
     searchForTypes.add(findSymbol.container_type);
+    let globalExport = GetGlobalExport(asmodule, findSymbol);
+    if (globalExport)
+        considerModules = scriptfiles.GetModulesPotentiallyDependentOn(globalExport.declaredModule);
 
     if (findSymbol.type == scriptfiles.ASSymbolType.MemberFunction
         || findSymbol.type == scriptfiles.ASSymbolType.MemberAccessor)
@@ -209,7 +238,7 @@ export function* FindReferences(uri : string, position : Position) : any
                     continue;
                 if (symbol.symbol_name != findSymbol.symbol_name)
                     continue;
-                if (!searchForTypes.has(symbol.container_type))
+                if (globalExport ? !MatchesGlobalExport(globalExport, checkmodule, symbol) : !searchForTypes.has(symbol.container_type))
                     continue;
 
                 references.push(checkmodule.getLocationRange(symbol.start, symbol.end));
@@ -348,6 +377,8 @@ export function* PerformRename(uri : string, position : Position, baseReplaceWit
     let findSymbol = asmodule.getSymbolAtOrBefore(offset);
     if (!findSymbol)
         return edits;
+
+    let globalExport = GetGlobalExport(asmodule, findSymbol);
 
     // Unknown symbols cannot be searched for
     if (findSymbol.type == scriptfiles.ASSymbolType.UnknownError)
@@ -516,6 +547,8 @@ export function* PerformRename(uri : string, position : Position, baseReplaceWit
             considerModules = [asmodule];
         else
             considerModules = scriptfiles.GetModulesPotentiallyDependentOnSymbol(asmodule, findSymbol);
+        if (globalExport)
+            considerModules = scriptfiles.GetModulesPotentiallyDependentOn(globalExport.declaredModule);
 
         // Look in all considered modules (Slow!)
         for (let checkmodule of considerModules)
@@ -538,7 +571,7 @@ export function* PerformRename(uri : string, position : Position, baseReplaceWit
             {
                 if (symbol.type != findSymbol.type && symbol.type != alternateType)
                     continue;
-                if (symbol.container_type != findSymbol.container_type)
+                if (globalExport ? !MatchesGlobalExport(globalExport, checkmodule, symbol) : symbol.container_type != findSymbol.container_type)
                     continue;
                 if (symbol.symbol_name != findSymbol.symbol_name)
                     continue;

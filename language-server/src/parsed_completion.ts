@@ -6,6 +6,7 @@ import {
 import * as typedb from './database';
 import * as scriptfiles from './as_parser';
 import * as specifiers from './specifiers';
+import { callbackError, callbackDescription, callbackDisplayName, isMulticastCallback } from './member_callbacks';
 import { FormatFunctionDocumentation, FormatPropertyDocumentation } from './documentation';
 import * as path from 'path';
 
@@ -276,7 +277,7 @@ export function Complete(asmodule: scriptfiles.ASModule, position: Position): Ar
     // Search for completions in all global and real types we are looking in
     for (let dbtype of searchTypes)
     {
-        let showEvents = !context.scope || context.scope.scopetype != scriptfiles.ASScopeType.Class || !insideType;
+        let showEvents = !context.scope || (context.scope.scopetype != scriptfiles.ASScopeType.Class && context.scope.scopetype != scriptfiles.ASScopeType.Implementation) || !insideType;
         AddCompletionsFromType(context, dbtype, completions, showEvents);
     }
 
@@ -295,7 +296,8 @@ export function Complete(asmodule: scriptfiles.ASModule, position: Position): Ar
         AddCompletionsFromCallSignature(context, completions);
 
     // Check for snippet completions for method overrides
-    if (context.scope && context.scope.scopetype == scriptfiles.ASScopeType.Class
+    if (context.scope && (context.scope.scopetype == scriptfiles.ASScopeType.Class || context.scope.scopetype == scriptfiles.ASScopeType.Implementation)
+        && (context.scope.scopetype == scriptfiles.ASScopeType.Implementation || !insideType?.isStructuredClass)
         && !context.isRightExpression && !context.isSubExpression && !context.isInsideType) {
         AddMethodOverrideSnippets(context, completions, position);
     }
@@ -509,6 +511,10 @@ function ScoreMethodOverload(context: CompletionContext, func: typedb.DBMethod, 
     for (let posArg = 0; posArg < posArgCount; ++posArg)
     {
         let argnode = argContext.nodesForPositionalArguments[posArg];
+        const callbackType = typedb.LookupType(func.namespace, func.args[posArg].typename);
+        if (isMulticastCallback(callbackType) && argnode?.type == scriptfiles.node_types.MemberAccess
+            && argnode.children[0]?.type == scriptfiles.node_types.This)
+            score += 30;
         let argType = scriptfiles.ResolveTypeFromExpression(context.scope, argnode);
         if (!argType)
             continue;
@@ -639,9 +645,18 @@ export function Signature(asmodule: scriptfiles.ASModule, position: Position): S
                 }
                 else
                 {
+                    const delegate = typedb.LookupType(func.namespace, func.args[a].typename);
+                    const binding = asmodule.delegateBinds.find(value => value.memberCallback && value.delegateType == delegate?.name
+                        && asmodule.getOffset(position) >= value.statement.start_offset + value.node_expression.start
+                        && asmodule.getOffset(position) <= value.statement.start_offset + value.node_expression.end);
+                    const callback = binding?.resolveBoundFunction();
                     params.push(<ParameterInformation>
                         {
-                            label: func.args[a].format()
+                            label: func.args[a].format(),
+                            documentation: delegate?.isDelegate && delegate.delegateArgs ? {
+                                kind: MarkupKind.Markdown, value: callback ? callbackDescription(delegate, callback) :
+                                    `${isMulticastCallback(delegate) ? '原生多播事件' : '委托'}：\`${delegate.delegateReturn} ${callbackDisplayName(delegate)}(${delegate.delegateArgs.map(arg => arg.format()).join(', ')})\`；可绑定 this.Method 并仅声明需要的参数前缀。`
+                            } : undefined,
                         });
                 }
             }
@@ -837,6 +852,7 @@ function AddCompletionsFromSpecifiers(context : CompletionContext, specifiers : 
 {
     for(let spec in specifiers)
     {
+        if (spec == "Required" && context.scope?.fieldRole != "config") continue;
         if (!context.completingSymbol || CanCompleteTo(context, spec))
         {
             completions.push({
@@ -1071,10 +1087,18 @@ function AddCompletionsFromUnrealMacro(context : CompletionContext, completions 
 function AddCompletionsFromKeywords(context : CompletionContext, completions : Array<CompletionItem>)
 {
     let inFunctionBody = !context.scope || context.scope.isInFunctionBody();
+    const isFieldSection = context.scope?.scopetype == scriptfiles.ASScopeType.FieldSection;
+    const isImplementation = context.scope?.scopetype == scriptfiles.ASScopeType.Implementation;
+    if (context.scope?.scopetype == scriptfiles.ASScopeType.Class && !context.scope.getParentType()?.isStruct
+        && !context.isRightExpression && !context.isSubExpression)
+    {
+        const usedRoles = new Set(context.scope.scopes.map(scope => scope.fieldRole));
+        AddCompletionsFromKeywordList(context, ["config", "state"].filter(role => !usedRoles.has(role as "config" | "state")), completions);
+    }
 
     let scopeType = context.scope ? context.scope.getParentType() : null;
-    let isInClass = (context.scope && context.scope.scopetype == scriptfiles.ASScopeType.Class) && scopeType && !scopeType.isStruct;
-    let isInStruct = (context.scope && context.scope.scopetype == scriptfiles.ASScopeType.Class) && scopeType && scopeType.isStruct;
+    let isInClass = (context.scope && (context.scope.scopetype == scriptfiles.ASScopeType.Class || context.scope.scopetype == scriptfiles.ASScopeType.Implementation)) && scopeType && !scopeType.isStruct;
+    let isInStruct = (context.scope && (context.scope.scopetype == scriptfiles.ASScopeType.Class || context.scope.scopetype == scriptfiles.ASScopeType.Implementation)) && scopeType && scopeType.isStruct;
 
     let isInSwitch = false;
     let isInLoop = false;
@@ -1172,7 +1196,7 @@ function AddCompletionsFromKeywords(context : CompletionContext, completions : A
             }
         }
 
-        if (isInClass || isInSwitch)
+        if ((isInClass && !isImplementation) || isInSwitch)
         {
             if (CanCompleteTo(context, "default"))
             {
@@ -1190,7 +1214,7 @@ function AddCompletionsFromKeywords(context : CompletionContext, completions : A
         && (!context.isSubExpression && !context.isRightExpression))
     {
         AddCompletionsFromKeywordList(context, [
-            "delegate", "event", "class", "struct",
+            "delegate", "event", "class", "struct", "impl",
             "property"
         ], completions);
 
@@ -1336,7 +1360,7 @@ function AddCompletionsFromKeywords(context : CompletionContext, completions : A
         }
     }
 
-    if ((context.scope && context.scope.scopetype == scriptfiles.ASScopeType.Class)
+    if ((context.scope && (context.scope.scopetype == scriptfiles.ASScopeType.Class || isImplementation || isFieldSection))
         || (context.baseStatement && context.baseStatement.ast && context.baseStatement.ast.type == scriptfiles.node_types.FunctionDecl && context.scope.getParentType()))
     {
         if (!context.isRightExpression && !context.isSubExpression)
@@ -1345,7 +1369,7 @@ function AddCompletionsFromKeywords(context : CompletionContext, completions : A
                 "override", "final", "property", "private", "protected", "access"
             ], completions);
 
-            if (CanCompleteToOnlyStart(context, "UPROPERTY"))
+            if (!isImplementation && CanCompleteToOnlyStart(context, "UPROPERTY"))
             {
                 // Don't complete to a macro if there was already a macro on the previous line
                 if (!/[\r\n\s]*(UFUNCTION|UPROPERTY)\s*\(/.test(context.previousLineContent))
@@ -1367,7 +1391,7 @@ function AddCompletionsFromKeywords(context : CompletionContext, completions : A
                             insertTextFormat: InsertTextFormat.Snippet,
                     });
 
-                    if (context.scope && context.scope.getDatabaseType() && context.scope.getDatabaseType().inheritsFrom("AActor"))
+                    if (!isFieldSection && context.scope && context.scope.getDatabaseType() && context.scope.getDatabaseType().inheritsFrom("AActor"))
                     {
                         completions.push({
                                 label: "UPROPERTY(DefaultComponent)",
@@ -1376,7 +1400,7 @@ function AddCompletionsFromKeywords(context : CompletionContext, completions : A
                         });
                     }
 
-                    if (context.scope && context.scope.getDatabaseType() && context.scope.getDatabaseType().inheritsFrom("UUserWidget"))
+                    if (!isFieldSection && context.scope && context.scope.getDatabaseType() && context.scope.getDatabaseType().inheritsFrom("UUserWidget"))
                     {
                         completions.push({
                                 label: "UPROPERTY(BindWidget)",
@@ -1385,8 +1409,8 @@ function AddCompletionsFromKeywords(context : CompletionContext, completions : A
                         });
                     }
 
-                    completions.push({
-                            label: "UPROPERTY(EditAnywhere)",
+                    if (context.scope?.fieldRole != "state") completions.push({
+                            label: context.scope?.fieldRole == "config" ? "UPROPERTY(EditDefaultsOnly)" : "UPROPERTY(EditAnywhere)",
                             kind: CompletionItemKind.Snippet,
                             sortText: Sort.Keyword,
                     });
@@ -1395,7 +1419,8 @@ function AddCompletionsFromKeywords(context : CompletionContext, completions : A
         }
 
         let scopeType = context.scope.getParentType();
-        if (scopeType && !scopeType.isStruct)
+        if (scopeType && !scopeType.isStruct && !isFieldSection
+            && (isImplementation || !scopeType.isStructuredClass))
         {
             if (!context.isRightExpression && !context.isSubExpression)
             {
@@ -1600,6 +1625,8 @@ export function AddCompletionsFromType(context : CompletionContext, curtype : ty
     {
         if (symbol instanceof typedb.DBProperty)
         {
+            if (context.expectedType?.isDelegate && context.priorExpression?.type == scriptfiles.node_types.This)
+                return;
             if (!CanCompleteSymbol(context, symbol))
                 return;
 
@@ -1613,13 +1640,12 @@ export function AddCompletionsFromType(context : CompletionContext, curtype : ty
             let compl = <CompletionItem>{
                     label: prop.name,
                     kind : CompletionItemKind.Field,
-                    labelDetails: <CompletionItemLabelDetails>
-                    {
-                        description: prop.typename,
-                    },
+                    labelDetails: GetPropertyCompletionLabelDetails(prop),
                     commitCharacters: [".", ";", ","],
                     filterText: GetSymbolFilterText(context, prop),
             };
+            if (prop.fieldRole)
+                compl.detail = compl.labelDetails.detail.trim() + " " + prop.typename;
 
             if (prop.containingType)
             {
@@ -1674,6 +1700,9 @@ export function AddCompletionsFromType(context : CompletionContext, curtype : ty
         else if (symbol instanceof typedb.DBMethod)
         {
             let func : typedb.DBMethod = symbol;
+            const isCallback = context.expectedType?.isDelegate && context.priorExpression?.type == scriptfiles.node_types.This;
+            if (isCallback && callbackError(context.expectedType, func, context.scope.getParentType())) return;
+            if (isCallback && context.scope.getParentFunction()?.isConst && !func.isConst) return;
             if (func.isMixin)
                 return;
             if (!CanCompleteSymbol(context, func))
@@ -1862,12 +1891,24 @@ export function AddCompletionsFromType(context : CompletionContext, curtype : ty
                         compl.commitCharacters.push(".");
                 }
 
+                if (isCallback) {
+                    compl.data = ['member_callback', func.containingType.name, func.name, func.id, context.expectedType.name];
+                    compl.insertText = func.name;
+                    compl.commitCharacters = [',', ')', ';'];
+                    compl.command = undefined;
+                    compl.labelDetails = { detail: ` [回调 ${func.args.length}/${context.expectedType.delegateArgs.length}]`, description: callbackDisplayName(context.expectedType) };
+                    compl.documentation = { kind: MarkupKind.Markdown, value: callbackDescription(context.expectedType, func) };
+                }
+
                 completions.push(compl);
             }
         }
         else if (symbol instanceof typedb.DBType)
         {
             let dbtype : typedb.DBType = symbol;
+
+            if (dbtype.name.startsWith('__ASMulticastCallback_'))
+                return;
 
             // Ignore template instantations for completion
             if (dbtype.isTemplateInstantiation)
@@ -2256,6 +2297,15 @@ function GetSymbolFilterText(context : CompletionContext, symbol : typedb.DBSymb
     return [symbol.name, ...symbol.keywords].join(" ");
 }
 
+function GetPropertyCompletionLabelDetails(prop : typedb.DBProperty) : CompletionItemLabelDetails
+{
+    const role = prop.fieldRole == "config" ? "config 配置" : prop.fieldRole == "state" ? "state 状态" : null;
+    return {
+        detail: role ? " [" + role + "]" : undefined,
+        description: prop.typename,
+    };
+}
+
 function GetPropertyAccessorFilterText(context : CompletionContext, symbol : typedb.DBMethod) : string | undefined
 {
     if (!symbol.declaredModule)
@@ -2281,7 +2331,7 @@ function GetTypenamePriority(context : CompletionContext, type : typedb.DBType) 
 
 function GetNamespacePriority(context : CompletionContext, namespace : typedb.DBNamespace) : string
 {
-    if (context.scope && context.scope.scopetype == scriptfiles.ASScopeType.Class)
+    if (context.scope && (context.scope.scopetype == scriptfiles.ASScopeType.Class || context.scope.scopetype == scriptfiles.ASScopeType.Implementation))
         return Sort.Namespace_Unexpected;
     if (CommonNamespaces.has(namespace.name))
         return Sort.Typename_Common;
@@ -3061,6 +3111,15 @@ function ExtractPriorExpressionAndSymbol(context : CompletionContext, node : any
             return true;
         }
         break;
+        case scriptfiles.node_types.ImplementationDefinition:
+        {
+            context.maybeTypename = true;
+            context.completingNode = node.name;
+            context.completingSymbol = node.name?.value ?? "";
+            context.priorExpression = null;
+            context.priorType = null;
+            return true;
+        }
         case scriptfiles.node_types.ClassDefinition:
         {
             context.priorExpression = null;
@@ -4442,6 +4501,17 @@ export function Resolve(item : CompletionItem) : CompletionItem
     let dataArray = item.data as Array<any>;
     let kind = dataArray[0];
 
+    if (kind == 'member_callback') {
+        const owner = typedb.GetTypeByName(dataArray[1]);
+        const method = owner?.getMethodWithIdHint(dataArray[2], dataArray[3]);
+        const delegate = typedb.GetTypeByName(dataArray[4]);
+        if (!method || callbackError(delegate, method, owner)) return null;
+        item.command = undefined;
+        item.insertText = method.name;
+        item.documentation = { kind: MarkupKind.Markdown, value: callbackDescription(delegate, method) };
+        return item;
+    }
+
     if (kind == "type")
     {
         let type = typedb.GetTypeByName(dataArray[1]);
@@ -4484,10 +4554,10 @@ export function Resolve(item : CompletionItem) : CompletionItem
 
             if (kind == "prop")
             {
-                item.labelDetails = <CompletionItemLabelDetails>
-                {
-                    description: prop.typename,
-                };
+                item.labelDetails = GetPropertyCompletionLabelDetails(prop);
+                item.detail = prop.fieldRole ? item.labelDetails.detail.trim() + " " + prop.typename : undefined;
+                if (prop.fieldRole)
+                    item.documentation.value += item.labelDetails.detail.trim() + "\n\n";
             }
         }
     }

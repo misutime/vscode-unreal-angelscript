@@ -9,7 +9,8 @@ export let SemanticTypeList : Array<string> = [
     "local_variable", "member_variable", "member_accessor", "global_variable",
     "global_accessor", "member_function", "global_function", "unknown_error",
     "typename", "typename_actor", "typename_component", "typename_struct", "typename_event",
-    "typename_delegate", "typename_primitive", "access_specifier"
+    "typename_delegate", "typename_primitive", "access_specifier",
+    "config_field", "state_field"
 ];
 
 for (let i = 0, Count = SemanticTypeList.length; i < Count; ++i)
@@ -148,7 +149,17 @@ function BuildSymbols(asmodule : scriptfiles.ASModule, builder : SemanticTokensB
                 type = SemanticTypes.local_variable;
             break;
             case scriptfiles.ASSymbolType.MemberVariable:
+            {
                 type = SemanticTypes.member_variable;
+                const scope = asmodule.getScopeAt(symbol.start);
+                const owner = typedb.LookupType(scope?.getNamespace(), symbol.container_type);
+                const property = owner?.findFirstSymbol(symbol.symbol_name, typedb.DBAllowSymbol.Properties);
+                if (property instanceof typedb.DBProperty)
+                {
+                    if (property.fieldRole == "config") type = SemanticTypes.config_field;
+                    else if (property.fieldRole == "state") type = SemanticTypes.state_field;
+                }
+            }
             break;
             case scriptfiles.ASSymbolType.MemberAccessor:
                 type = SemanticTypes.member_accessor;

@@ -36,7 +36,7 @@ async function main() {
 		sourcesContent: false,
 		platform: 'node',
 		outdir: 'dist',
-		external: ['vscode'],
+		external: ['vscode', 'clang-format-node'],
 		logLevel: 'silent',
 		plugins: [
 			/* add to the end of plugins array */

@@ -5,6 +5,7 @@
 'use strict';
 
 import * as path from 'path';
+import { registerFormatting } from './formatting/register';
 
 import { workspace, ExtensionContext, TextDocument, Range, InlayHint } from 'vscode';
 import { LanguageClient, LanguageClientOptions, ServerOptions, Definition, TransportKind, Diagnostic, RequestType, ExecuteCommandRequest, ExecuteCommandParams, ExecuteCommandRegistrationOptions, TextDocumentPositionParams, ImplementationRequest, TypeDefinitionRequest, TextDocumentItem } from 'vscode-languageclient/node';
@@ -22,6 +23,8 @@ const GetAPIDetailsRequest = new RequestType<any, string, void>('angelscript/get
 const GetAPISearchRequest = new RequestType<any, any[], void>('angelscript/getAPISearch');
 
 export function activate(context: ExtensionContext) {
+
+    registerFormatting(context);
 
     // The server is implemented in node
     let serverModule = context.asAbsolutePath(path.join('language-server', 'dist', 'server.js'));
