@@ -534,770 +534,770 @@ function peg$parse(input, options) {
 
   function peg$f0() {    return null;  }
   function peg$f1(comment, decl) {
-        if (comment)
-            decl.documentation = comment;
-        return decl;
+    if (comment)
+        decl.documentation = comment;
+    return decl;
   }
   function peg$f2() {    return null;  }
   function peg$f3(comment, decl) {
-        if (comment)
-            decl.documentation = comment;
-        return decl;
+    if (comment)
+        decl.documentation = comment;
+    return decl;
   }
   function peg$f4() {    return null;  }
   function peg$f5() {    return null;  }
   function peg$f6(macro, scope, decl) {
-            decl.macro = macro;
-            decl.scoping = scope;
-            return decl;
+    decl.macro = macro;
+    decl.scoping = scope;
+    return decl;
   }
   function peg$f7(condition, body) {
-        return Compound(range(), n.IfStatement, [condition, body]);
+    return Compound(range(), n.IfStatement, [condition, body]);
   }
   function peg$f8(value) {
-        return Compound(range(), n.ReturnStatement, value ? [value] : []);
+    return Compound(range(), n.ReturnStatement, value ? [value] : []);
   }
   function peg$f9(body) {
-        return Compound(range(), n.ElseStatement, [body]);
+    return Compound(range(), n.ElseStatement, [body]);
   }
   function peg$f10(cond) {
-        return Compound(range(), n.SwitchStatement, [cond]);
+    return Compound(range(), n.SwitchStatement, [cond]);
   }
   function peg$f11(init, cond, iter) {
-                return [cond, iter];
+    return [cond, iter];
   }
   function peg$f12(init, loop, body) {
-            return Compound(range(), n.ForLoop, loop ? [init, loop[0], loop[1], body] : [init, null, null, body]);
+    return Compound(range(), n.ForLoop, loop ? [init, loop[0], loop[1], body] : [init, null, null, body]);
   }
   function peg$f13(type, iterator, expr, body) {
-            return Compound(range(), n.ForEachLoop, [type, iterator, expr, body]);
+    return Compound(range(), n.ForEachLoop, [type, iterator, expr, body]);
   }
   function peg$f14(inner) {
-        return ExtendedCompound(range(), inner);
+    return ExtendedCompound(range(), inner);
   }
   function peg$f15(head, tail) {
-        if (tail.length != 0)
-            return Compound(range(), n.CommaExpression, [head].concat(tail));
-        else
-            return head;
+    if (tail.length != 0)
+        return Compound(range(), n.CommaExpression, [head].concat(tail));
+    else
+        return head;
   }
   function peg$f16(lbl, body) {    return [true, body];  }
   function peg$f17(lbl) {    return [false, "::"];  }
   function peg$f18(lbl) {    return [false, ":"];  }
   function peg$f19(lbl, stmt) {
-            if (stmt)
-            {
-                if (stmt[0])
-                {
-                    let node = Compound(range(), n.CaseStatement, [lbl, stmt[1]]);
-                    node.has_statement = true;
-                    return node;
-                }
-                else if (lbl.type == n.Identifier)
-                {
-                    let inner = Compound(range(), n.NamespaceAccess, [lbl, null]);
-                    if (stmt[1] == ":")
-                        inner.incomplete_colon = true;
-                    return Compound(range(), n.CaseStatement, [inner, null]);
-                }
-                else
-                {
-                    let node = Compound(range(), n.CaseStatement, [lbl, null]);
-                    node.has_statement = true;
-                    return node;
-                }
-            }
-            else
-            {
-                return Compound(range(), n.CaseStatement, [lbl, null]);
-            }
-  }
-  function peg$f20(inner) {
-        return ExtendedCompound(range(), inner);
-  }
-  function peg$f21(body) {
-        return Compound(range(), n.DefaultCaseStatement, [body]);
-  }
-  function peg$f22() {    return Literal(range(), n.ConstInteger, text());  }
-  function peg$f23(token) {
-        return Literal(range(), n.ContinueStatement, token);
-  }
-  function peg$f24(token) {
-        return Literal(range(), n.BreakStatement, token);
-  }
-  function peg$f25(token) {
-        return Literal(range(), n.FallthroughStatement, token);
-  }
-  function peg$f26(cond, body) {
-        return Compound(range(), n.WhileLoop, [cond, body]);
-  }
-  function peg$f27(head, op, right) {
-            return [op, right];
-  }
-  function peg$f28(head, tail) {
-        return tail.reduce(function(result, element)
+    if (stmt)
+    {
+        if (stmt[0])
         {
-            if (element[0] == "=")
-                return Compound(range(), n.Assignment, [result, element[1]]);
-            else
-                return CompoundOperator(range(), n.CompoundAssignment, element[0], [result, element[1]]);
-        }, head);
-  }
-  function peg$f29(type, head, tail) {
-        head.typename = type;
-        if (tail.length != 0)
+            let node = Compound(range(), n.CaseStatement, [lbl, stmt[1]]);
+            node.has_statement = true;
+            return node;
+        }
+        else if (lbl.type == n.Identifier)
         {
-            let vars = [head];
-            for (let part of tail)
-            {
-                part.typename = type;
-                vars.push(part);
-            }
-
-            return Compound(range(), n.VariableDeclMulti, vars);
+            let inner = Compound(range(), n.NamespaceAccess, [lbl, null]);
+            if (stmt[1] == ":")
+                inner.incomplete_colon = true;
+            return Compound(range(), n.CaseStatement, [inner, null]);
         }
         else
         {
-            return ExtendedCompound(range(), head);
+            let node = Compound(range(), n.CaseStatement, [lbl, null]);
+            node.has_statement = true;
+            return node;
         }
+    }
+    else
+    {
+        return Compound(range(), n.CaseStatement, [lbl, null]);
+    }
+  }
+  function peg$f20(inner) {
+    return ExtendedCompound(range(), inner);
+  }
+  function peg$f21(body) {
+    return Compound(range(), n.DefaultCaseStatement, [body]);
+  }
+  function peg$f22() {    return Literal(range(), n.ConstInteger, text());  }
+  function peg$f23(token) {
+    return Literal(range(), n.ContinueStatement, token);
+  }
+  function peg$f24(token) {
+    return Literal(range(), n.BreakStatement, token);
+  }
+  function peg$f25(token) {
+    return Literal(range(), n.FallthroughStatement, token);
+  }
+  function peg$f26(cond, body) {
+    return Compound(range(), n.WhileLoop, [cond, body]);
+  }
+  function peg$f27(head, op, right) {
+    return [op, right];
+  }
+  function peg$f28(head, tail) {
+    return tail.reduce(function(result, element)
+    {
+        if (element[0] == "=")
+            return Compound(range(), n.Assignment, [result, element[1]]);
+        else
+            return CompoundOperator(range(), n.CompoundAssignment, element[0], [result, element[1]]);
+    }, head);
+  }
+  function peg$f29(type, head, tail) {
+    head.typename = type;
+    if (tail.length != 0)
+    {
+        let vars = [head];
+        for (let part of tail)
+        {
+            part.typename = type;
+            vars.push(part);
+        }
+
+        return Compound(range(), n.VariableDeclMulti, vars);
+    }
+    else
+    {
+        return ExtendedCompound(range(), head);
+    }
   }
   function peg$f30(name, expr) {    return [0, expr];  }
   function peg$f31(name, args) {    return [1, args];  }
   function peg$f32(name, value) {
-        let node = Compound(range(), n.VariableDecl, null);
-        node.name = name;
-        if (value)
-        {
-            if (value[0] == 0)
-                node.inline_assignment = true;
-            else if (value[0] == 1)
-                node.inline_constructor = true;
-            node.expression = value[1];
-        }
-        return node;
+    let node = Compound(range(), n.VariableDecl, null);
+    node.name = name;
+    if (value)
+    {
+        if (value[0] == 0)
+            node.inline_assignment = true;
+        else if (value[0] == 1)
+            node.inline_constructor = true;
+        node.expression = value[1];
+    }
+    return node;
   }
   function peg$f33(type) {
-        let node = Compound(range(), n.VariableDecl, null);
-        node.name = null;
-        node.typename = type;
-        return node;
+    let node = Compound(range(), n.VariableDecl, null);
+    node.name = null;
+    node.typename = type;
+    return node;
   }
   function peg$f34(constq, name, refq) {
-        let node = ExtendedCompound(range(), name);
-        node.const_qualifier = constq;
-        node.ref_qualifier = refq;
-        return node;
+    let node = ExtendedCompound(range(), name);
+    node.const_qualifier = constq;
+    node.ref_qualifier = refq;
+    return node;
   }
   function peg$f35(token) {
-        return Identifier(range(), token);
+    return Identifier(range(), token);
   }
   function peg$f36(type) {
-        if (type)
-            return "&" + type;
-        else
-            return "&";
+    if (type)
+        return "&" + type;
+    else
+        return "&";
   }
   function peg$f37() {    return Literal(range(), n.Typename, text());  }
   function peg$f38(basetype, head, tail) {    return [head].concat(tail);  }
   function peg$f39(basetype, types) {    return types;  }
   function peg$f40(basetype, subtypes) {
-        if (subtypes)
+    if (subtypes)
+    {
+        let name = basetype.value + "<";
+        for (let i = 0; i < subtypes.length; ++i)
         {
-            let name = basetype.value + "<";
-            for (let i = 0; i < subtypes.length; ++i)
-            {
-                if (i != 0)
-                    name += ",";
-                name += subtypes[i].value;
-            }
-            name += ">";
+            if (i != 0)
+                name += ",";
+            name += subtypes[i].value;
+        }
+        name += ">";
 
-            let node = Literal(range(), n.Typename, name);
-            node.basetype = basetype;
-            node.subtypes = subtypes;
-            return node;
-        }
-        else
-        {
-            let node = Literal(range(), n.Typename, basetype.value);
-            node.name = basetype;
-            return node;
-        }
+        let node = Literal(range(), n.Typename, name);
+        node.basetype = basetype;
+        node.subtypes = subtypes;
+        return node;
+    }
+    else
+    {
+        let node = Literal(range(), n.Typename, basetype.value);
+        node.name = basetype;
+        return node;
+    }
   }
   function peg$f41() {
-        let node = Literal(range(), n.Typename, text());
-        node.name = node;
-        return node;
+    let node = Literal(range(), n.Typename, text());
+    node.name = node;
+    return node;
   }
   function peg$f42(identifiers) {
-            return Literal(range(), n.Typename, text());
+    return Literal(range(), n.Typename, text());
   }
   function peg$f43(basetype, head, tail) {    return [head].concat(tail);  }
   function peg$f44(basetype, types) {    return types;  }
   function peg$f45(basetype, subtypes) {
-        if (subtypes)
+    if (subtypes)
+    {
+        let name = basetype.value + "<";
+        for (let i = 0; i < subtypes.length; ++i)
         {
-            let name = basetype.value + "<";
-            for (let i = 0; i < subtypes.length; ++i)
-            {
-                if (i != 0)
-                    name += ",";
-                name += subtypes[i].value;
-            }
-            name += ">";
+            if (i != 0)
+                name += ",";
+            name += subtypes[i].value;
+        }
+        name += ">";
 
-            let node = Literal(range(), n.Typename, name);
-            node.basetype = basetype;
-            node.subtypes = subtypes;
-            return node;
-        }
-        else
-        {
-            let node = Literal(range(), n.Typename, basetype.value);
-            node.name = basetype;
-            return node;
-        }
+        let node = Literal(range(), n.Typename, name);
+        node.basetype = basetype;
+        node.subtypes = subtypes;
+        return node;
+    }
+    else
+    {
+        let node = Literal(range(), n.Typename, basetype.value);
+        node.name = basetype;
+        return node;
+    }
   }
   function peg$f46() {    return null;  }
   function peg$f47(token) {    return Literal(range(), n.This, token);  }
   function peg$f48(leading, ident, namespaces, trailing) {
-        if (leading)
-            ident = InnerCompound(range(), n.NamespaceAccess, [null, ident]);
+    if (leading)
+        ident = InnerCompound(range(), n.NamespaceAccess, [null, ident]);
+    if (trailing)
+        namespaces.push(null);
+    if (namespaces.length != 0)
+    {
+        let outer = namespaces.reduce(function (result, element)
+        {
+            return InnerCompound(range(), n.NamespaceAccess, [result, element]);
+        }, ident);
         if (trailing)
-            namespaces.push(null);
-        if (namespaces.length != 0)
-        {
-            let outer = namespaces.reduce(function (result, element)
-            {
-                return InnerCompound(range(), n.NamespaceAccess, [result, element]);
-            }, ident);
-            if (trailing)
-                outer.incomplete_colon = true;
-            return outer;
-        }
-        else
-        {
-            return ident;
-        }
+            outer.incomplete_colon = true;
+        return outer;
+    }
+    else
+    {
+        return ident;
+    }
   }
   function peg$f49(leading, ident, namespaces) {
-        if (leading)
-            ident = InnerCompound(range(), n.NamespaceAccess, [null, ident]);
-        if (namespaces.length != 0)
+    if (leading)
+        ident = InnerCompound(range(), n.NamespaceAccess, [null, ident]);
+    if (namespaces.length != 0)
+    {
+        let outer = namespaces.reduce(function (result, element)
         {
-            let outer = namespaces.reduce(function (result, element)
-            {
-                return InnerCompound(range(), n.NamespaceAccess, [result, element]);
-            }, ident);
-            return outer;
-        }
-        else
-        {
-            return ident;
-        }
+            return InnerCompound(range(), n.NamespaceAccess, [result, element]);
+        }, ident);
+        return outer;
+    }
+    else
+    {
+        return ident;
+    }
   }
   function peg$f50(head, args) {    return [0, args, range()];  }
   function peg$f51(head, inner) {    return [1, inner, range()];  }
   function peg$f52(head, inner) {    return [2, inner];  }
   function peg$f53(head, tail) {
-        return tail.reduce(function (result, element) {
-            if (element[0] == 0)
-            {
-                let expr = InnerCompound(
-                    range(),
-                    n.FunctionCall,
-                    [result, element[1]]
-                );
-                if (element[2].end > expr.end)
-                    expr.end = element[2].end;
-                return expr;
-            }
-            else if (element[0] == 1)
-            {
-                let expr = InnerCompound(
-                    range(),
-                    n.IndexOperator,
-                    [result, element[1]]
-                );
-                if (element[2].end > expr.end)
-                    expr.end = element[2].end;
-                return expr;
-            }
-            else if (element[0] == 2)
-            {
-                return InnerCompound(
-                    range(),
-                    n.MemberAccess,
-                    [result, element[1]]
-                );
-            }
-        }, head);
+    return tail.reduce(function (result, element) {
+        if (element[0] == 0)
+        {
+            let expr = InnerCompound(
+                range(),
+                n.FunctionCall,
+                [result, element[1]]
+            );
+            if (element[2].end > expr.end)
+                expr.end = element[2].end;
+            return expr;
+        }
+        else if (element[0] == 1)
+        {
+            let expr = InnerCompound(
+                range(),
+                n.IndexOperator,
+                [result, element[1]]
+            );
+            if (element[2].end > expr.end)
+                expr.end = element[2].end;
+            return expr;
+        }
+        else if (element[0] == 2)
+        {
+            return InnerCompound(
+                range(),
+                n.MemberAccess,
+                [result, element[1]]
+            );
+        }
+    }, head);
   }
   function peg$f54(head, tail) {
-        return Compound(
-            range(),
-            n.ArgumentList,
-            [head].concat(tail)
-        );
+    return Compound(
+        range(),
+        n.ArgumentList,
+        [head].concat(tail)
+    );
   }
   function peg$f55() {    return null;  }
   function peg$f56(name) {
-        let ident = Literal(range(), n.Identifier, name);
-        ident.maybeTypename = true;
-        return Compound(
-            range(),
-            n.ArgumentList,
-            [ident]
-        );
+    let ident = Literal(range(), n.Identifier, name);
+    ident.maybeTypename = true;
+    return Compound(
+        range(),
+        n.ArgumentList,
+        [ident]
+    );
   }
   function peg$f57(expr) {
-        return Compound(
-            range(),
-            n.ArgumentList,
-            [expr]
-        );
+    return Compound(
+        range(),
+        n.ArgumentList,
+        [expr]
+    );
   }
   function peg$f58(name, expr) {    return Compound(range(), n.NamedArgument, [name, expr]);  }
   function peg$f59(expr, trailing) {
-        if (trailing && expr.type == n.Identifier)
-            return Compound(range(), n.NamedArgument, [expr, trailing]);
-        else
-            return expr;
+    if (trailing && expr.type == n.Identifier)
+        return Compound(range(), n.NamedArgument, [expr, trailing]);
+    else
+        return expr;
   }
   function peg$f60(condition, first, second) {
-                // We might have parsed the ":" as a trailing incomplete namespace,
-                // if that happened we need to fix it manually
-                if (first.type == n.NamespaceAccess && first.incomplete_colon)
-                {
-                    if (!second || !second[0])
-                        return [first.children[0], second ? second[1] : null]
-                }
+    // We might have parsed the ":" as a trailing incomplete namespace,
+    // if that happened we need to fix it manually
+    if (first.type == n.NamespaceAccess && first.incomplete_colon)
+    {
+        if (!second || !second[0])
+            return [first.children[0], second ? second[1] : null]
+    }
 
-                return [first, second ? second[1] : null];
+    return [first, second ? second[1] : null];
   }
   function peg$f61(condition, result) {    return result ? result : [null, null];  }
   function peg$f62(condition, conseq) {
-        if (conseq)
-            return Compound(range(), n.TernaryOperation, [condition, conseq[0], conseq[1]]);
-        else
-            return condition;
+    if (conseq)
+        return Compound(range(), n.TernaryOperation, [condition, conseq[0], conseq[1]]);
+    else
+        return condition;
   }
   function peg$f63(head, op, expr) {    return [op, expr];  }
   function peg$f64(head, tail) {
-        return tail.reduce(function (result, element) {
-            return InnerCompoundOperator(
-                range(),
-                n.BinaryOperation,
-                element[0],
-                [result, element[1]]
-            );
-        }, head);
+    return tail.reduce(function (result, element) {
+        return InnerCompoundOperator(
+            range(),
+            n.BinaryOperation,
+            element[0],
+            [result, element[1]]
+        );
+    }, head);
   }
   function peg$f65(head, op, expr) {    return [op, expr];  }
   function peg$f66(head, tail) {
-        return tail.reduce(function (result, element) {
-            return InnerCompoundOperator(
-                range(),
-                n.BinaryOperation,
-                element[0],
-                [result, element[1]]
-            );
-        }, head);
+    return tail.reduce(function (result, element) {
+        return InnerCompoundOperator(
+            range(),
+            n.BinaryOperation,
+            element[0],
+            [result, element[1]]
+        );
+    }, head);
   }
   function peg$f67(head, op, expr) {    return [op, expr];  }
   function peg$f68(head, tail) {
-        return tail.reduce(function (result, element) {
-            return InnerCompoundOperator(
-                range(),
-                n.BinaryOperation,
-                element[0],
-                [result, element[1]]
-            );
-        }, head);
+    return tail.reduce(function (result, element) {
+        return InnerCompoundOperator(
+            range(),
+            n.BinaryOperation,
+            element[0],
+            [result, element[1]]
+        );
+    }, head);
   }
   function peg$f69(head, op, expr) {    return [op, expr];  }
   function peg$f70(head, tail) {
-        return tail.reduce(function (result, element) {
-            return InnerCompoundOperator(
-                range(),
-                n.BinaryOperation,
-                element[0],
-                [result, element[1]]
-            );
-        }, head);
+    return tail.reduce(function (result, element) {
+        return InnerCompoundOperator(
+            range(),
+            n.BinaryOperation,
+            element[0],
+            [result, element[1]]
+        );
+    }, head);
   }
   function peg$f71(head, op, expr) {    return [op, expr];  }
   function peg$f72(head, tail) {
-        return tail.reduce(function (result, element) {
-            return InnerCompoundOperator(
-                range(),
-                n.BinaryOperation,
-                element[0],
-                [result, element[1]]
-            );
-        }, head);
+    return tail.reduce(function (result, element) {
+        return InnerCompoundOperator(
+            range(),
+            n.BinaryOperation,
+            element[0],
+            [result, element[1]]
+        );
+    }, head);
   }
   function peg$f73(op, expr) {
+    return CompoundOperator(
+        range(),
+        n.UnaryOperation,
+        op,
+        [expr]
+    );
+  }
+  function peg$f74(expr, op) {
+    if (op)
+    {
         return CompoundOperator(
             range(),
-            n.UnaryOperation,
+            n.PostfixOperation,
             op,
             [expr]
         );
-  }
-  function peg$f74(expr, op) {
-        if (op)
-        {
-            return CompoundOperator(
-                range(),
-                n.PostfixOperation,
-                op,
-                [expr]
-            );
-        }
-        else
-        {
-            return expr;
-        }
+    }
+    else
+    {
+        return expr;
+    }
   }
   function peg$f75(op) {    return CompoundOperator(range(), n.UnaryOperation, op, []);  }
   function peg$f76(type, expr) {    return Compound(range(), n.CastOperation, [type, expr]);  }
   function peg$f77(type) {    return Compound(range(), n.CastOperation, [type, null]);  }
   function peg$f78() {    return Compound(range(), n.CastOperation, [null, null]);  }
   function peg$f79(inner) {
-        return ExtendedCompound(range(), inner);
+    return ExtendedCompound(range(), inner);
   }
   function peg$f80(type, args) {
-        return Compound(range(), n.ConstructorCall, [type, args]);
+    return Compound(range(), n.ConstructorCall, [type, args]);
   }
   function peg$f81() {    return Literal(range(), n.ConstBool, "true");  }
   function peg$f82() {    return Literal(range(), n.ConstBool, "false");  }
   function peg$f83() {    return Literal(range(), n.ConstNullptr, "nullptr");  }
   function peg$f84() {
-        return Literal(range(), n.ConstString, text());
+    return Literal(range(), n.ConstString, text());
   }
   function peg$f85() {
-        return Literal(range(), n.ConstString, text());
+    return Literal(range(), n.ConstString, text());
   }
   function peg$f86() {
-        return Literal(range(), n.ConstFormatString, text());
+    return Literal(range(), n.ConstFormatString, text());
   }
   function peg$f87() {
-        return Literal(range(), n.ConstName, text());
+    return Literal(range(), n.ConstName, text());
   }
   function peg$f88(content) {
-        return Literal(range(), n.ConstString, text());
+    return Literal(range(), n.ConstString, text());
   }
   function peg$f89(head, exponent, suffix) {
-        let value = head[1];
-        if (exponent)
-            value += exponent;
-        if (suffix)
-            value += suffix;
+    let value = head[1];
+    if (exponent)
+        value += exponent;
+    if (suffix)
+        value += suffix;
 
-        if (suffix)
-        {
-            return Literal(range(), n.ConstFloat, text());
-        }
-        else if (exponent || head[1])
-        {
-            return Literal(range(), n.ConstDouble, text());
-        }
-        else
-        {
-            return Literal(range(), n.ConstInteger, text());
-        }
+    if (suffix)
+    {
+        return Literal(range(), n.ConstFloat, text());
+    }
+    else if (exponent || head[1])
+    {
+        return Literal(range(), n.ConstDouble, text());
+    }
+    else
+    {
+        return Literal(range(), n.ConstInteger, text());
+    }
   }
   function peg$f90(sign, num) {
-        if (sign)
-            return Literal(range(), num.type, text());
-        return num;
+    if (sign)
+        return Literal(range(), num.type, text());
+    return num;
   }
   function peg$f91() {
-        return Literal(range(), n.ConstHexInteger, text());
+    return Literal(range(), n.ConstHexInteger, text());
   }
   function peg$f92() {
-        return Literal(range(), n.ConstBinaryInteger, text());
+    return Literal(range(), n.ConstBinaryInteger, text());
   }
   function peg$f93() {
-        return Literal(range(), n.ConstOctalInteger, text());
+    return Literal(range(), n.ConstOctalInteger, text());
   }
   function peg$f94(start, rest) {    return Identifier(range(), text());  }
   function peg$f95(docs) {
-        if (docs.length == 0)
-            return null;
+    if (docs.length == 0)
+        return null;
 
-        let result = "";
-        for (let comment of docs)
-        {
-            if (!comment || comment[0] == '#')
-                continue;
-            else if (comment[0] == '/' && comment[1] == '*')
-                result = comment.substring(2, comment.length-2);
-            else if (comment[0] == '/' && comment[1] == '/')
-                result = comment.substring(2);
-        }
-        return result;
+    let result = "";
+    for (let comment of docs)
+    {
+        if (!comment || comment[0] == '#')
+            continue;
+        else if (comment[0] == '/' && comment[1] == '*')
+            result = comment.substring(2, comment.length-2);
+        else if (comment[0] == '/' && comment[1] == '/')
+            result = comment.substring(2);
+    }
+    return result;
   }
   function peg$f96(ret, name) {    return options.precedesBlock && !options.endsWithSemicolon;  }
   function peg$f97(ret, name) {    return !options.precedesBlock || options.endsWithSemicolon;  }
   function peg$f98(ret, name, params, quals) {
-        let node = Compound(range(), n.FunctionDecl, null);
-        node.name = name;
-        node.returntype = ret;
-        node.parameters = params;
-        node.qualifiers = quals;
-        return node;
+    let node = Compound(range(), n.FunctionDecl, null);
+    node.name = name;
+    node.returntype = ret;
+    node.parameters = params;
+    node.qualifiers = quals;
+    return node;
   }
   function peg$f99(name, params) {
-        let node = Compound(range(), n.FunctionDecl, null);
-        node.name = name;
-        node.returntype = null;
-        node.parameters = params;
-        node.qualifiers = [];
-        return node;
+    let node = Compound(range(), n.FunctionDecl, null);
+    node.name = name;
+    node.returntype = null;
+    node.parameters = params;
+    node.qualifiers = [];
+    return node;
   }
   function peg$f100(ret, name, params, quals) {
-        let node = Compound(range(), n.FunctionDecl, null);
-        node.name = name;
-        node.returntype = ret;
-        node.parameters = params;
-        node.qualifiers = quals;
-        return node;
+    let node = Compound(range(), n.FunctionDecl, null);
+    node.name = name;
+    node.returntype = ret;
+    node.parameters = params;
+    node.qualifiers = quals;
+    return node;
   }
   function peg$f101(name, params) {
-        let node = Compound(range(), n.FunctionDecl, null);
-        node.name = name;
-        node.returntype = null;
-        node.parameters = params;
-        node.qualifiers = [];
-        return node;
+    let node = Compound(range(), n.FunctionDecl, null);
+    node.name = name;
+    node.returntype = null;
+    node.parameters = params;
+    node.qualifiers = [];
+    return node;
   }
   function peg$f102() {    return null;  }
   function peg$f103(head, tail) {
-            let params = [];
-            if (head)
-                params.push(head);
-            for (let p of tail)
-            {
-                if (p)
-                    params.push(p);
-            }
-            return params;
+    let params = [];
+    if (head)
+        params.push(head);
+    for (let p of tail)
+    {
+        if (p)
+            params.push(p);
+    }
+    return params;
   }
   function peg$f104(params) {
-        return params ? params : [];
+    return params ? params : [];
   }
   function peg$f105(head, tail) {
-            let params = [];
-            if (head)
-                params.push(head);
-            for (let p of tail)
-            {
-                if (p)
-                    params.push(p);
-            }
-            return params;
+    let params = [];
+    if (head)
+        params.push(head);
+    for (let p of tail)
+    {
+        if (p)
+            params.push(p);
+    }
+    return params;
   }
   function peg$f106(params) {
-        return params ? params : [];
+    return params ? params : [];
   }
   function peg$f107(type, name, expr) {
-        let node = Compound(range(), n.Parameter, null);
-        node.typename = type;
-        node.name = name;
-        node.expression = expr;
-        return node;
+    let node = Compound(range(), n.Parameter, null);
+    node.typename = type;
+    node.name = name;
+    node.expression = expr;
+    return node;
   }
   function peg$f108() {    return null;  }
   function peg$f109() {    return null;  }
   function peg$f110() {    return null;  }
   function peg$f111(type, name, expr) {    return [name, expr];  }
   function peg$f112(type, decl) {
-        let node = Compound(range(), n.Parameter, null);
-        node.typename = type;
-        if (decl)
-        {
-            node.name = decl[0];
-            node.expression = decl[1];
-        }
-        return node;
+    let node = Compound(range(), n.Parameter, null);
+    node.typename = type;
+    if (decl)
+    {
+        node.name = decl[0];
+        node.expression = decl[1];
+    }
+    return node;
   }
   function peg$f113() {    return null;  }
   function peg$f114(macros) {
-        return Compound(range(), n.Macro, macros);
+    return Compound(range(), n.Macro, macros);
   }
   function peg$f115(macros) {
-        return Compound(range(), n.Macro, macros);
+    return Compound(range(), n.Macro, macros);
   }
   function peg$f116(macros) {
-        return Compound(range(), n.Macro, macros);
+    return Compound(range(), n.Macro, macros);
   }
   function peg$f117(macros) {
-        return Compound(range(), n.Macro, macros);
+    return Compound(range(), n.Macro, macros);
   }
   function peg$f118(macros) {
-        return Compound(range(), n.Macro, macros);
+    return Compound(range(), n.Macro, macros);
   }
   function peg$f119(macros) {
-        return Compound(range(), n.Macro, macros);
+    return Compound(range(), n.Macro, macros);
   }
   function peg$f120(head, tail) {
-            let specifiers = [];
-            if (head)
-                specifiers.push(head);
-            for (let p of tail)
-            {
-                if (p)
-                    specifiers.push(p);
-            }
-            return specifiers;
+    let specifiers = [];
+    if (head)
+        specifiers.push(head);
+    for (let p of tail)
+    {
+        if (p)
+            specifiers.push(p);
+    }
+    return specifiers;
   }
   function peg$f121(specifiers) {
-        return specifiers ? specifiers : [];
+    return specifiers ? specifiers : [];
   }
   function peg$f122(name, value) {    return [0, value];  }
   function peg$f123(name, list) {    return[1, list];  }
   function peg$f124(name, value) {
-        let node = Compound(range(), n.MacroArgument, null);
-        node.name = name;
+    let node = Compound(range(), n.MacroArgument, null);
+    node.name = name;
 
-        if (value)
-        {
-            if (value[0] == 0)
-                node.value = value[1];
-            else if (value[0] == 1)
-                node.children = value[1];
-        }
+    if (value)
+    {
+        if (value[0] == 0)
+            node.value = value[1];
+        else if (value[0] == 1)
+            node.children = value[1];
+    }
 
-        return node;
+    return node;
   }
   function peg$f125(str) {
-        return Identifier(range(), str.value.substring(1, str.value.length-1));
+    return Identifier(range(), str.value.substring(1, str.value.length-1));
   }
   function peg$f126() {
-        return Identifier(range(), text());
+    return Identifier(range(), text());
   }
   function peg$f127() {
-        return Identifier(range(), text());
+    return Identifier(range(), text());
   }
   function peg$f128(sig) {
-        return Compound(range(), n.DelegateDecl, [sig]);
+    return Compound(range(), n.DelegateDecl, [sig]);
   }
   function peg$f129(sig) {
-        return Compound(range(), n.EventDecl, [sig]);
+    return Compound(range(), n.EventDecl, [sig]);
   }
   function peg$f130(macro, name) {
-        let node = Compound(range(), n.StructDefinition, null);
-        node.name = name;
-        node.macro = macro;
-        return node;
+    let node = Compound(range(), n.StructDefinition, null);
+    node.name = name;
+    node.macro = macro;
+    return node;
   }
   function peg$f131() {    return options.precedesBlock;  }
   function peg$f132(name) {
-        let node = Compound(range(), n.ImplementationDefinition, null);
-        node.name = name;
-        return node;
+    let node = Compound(range(), n.ImplementationDefinition, null);
+    node.name = name;
+    return node;
   }
   function peg$f133() {    return options.precedesBlock;  }
   function peg$f134(role) {
-        let node = Compound(range(), n.FieldSectionDefinition, null);
-        node.role = role;
-        return node;
+    let node = Compound(range(), n.FieldSectionDefinition, null);
+    node.role = role;
+    return node;
   }
   function peg$f135(macro, name) {
-                return Identifier(range(), text());
+    return Identifier(range(), text());
   }
   function peg$f136(macro, name, superclass) {
-        let node = Compound(range(), n.ClassDefinition, null);
-        node.name = name;
-        node.macro = macro;
-        node.superclass = superclass;
-        return node;
+    let node = Compound(range(), n.ClassDefinition, null);
+    node.name = name;
+    node.macro = macro;
+    node.superclass = superclass;
+    return node;
   }
   function peg$f137(macro, name) {
-        let node = Compound(range(), n.EnumDefinition, null);
-        node.name = name;
-        node.macro = macro;
-        return node;
+    let node = Compound(range(), n.EnumDefinition, null);
+    node.name = name;
+    node.macro = macro;
+    return node;
   }
   function peg$f138() {
-            return Identifier(range(), text());
+    return Identifier(range(), text());
   }
   function peg$f139(name) {
-        let node = Compound(range(), n.NamespaceDefinition, null);
-        node.name = name;
-        return node;
+    let node = Compound(range(), n.NamespaceDefinition, null);
+    node.name = name;
+    return node;
   }
   function peg$f140(name, type) {
-        let node = Compound(range(), n.AssetDefinition, null);
-        node.name = name;
-        node.typename = type;
-        return node;
+    let node = Compound(range(), n.AssetDefinition, null);
+    node.name = name;
+    node.typename = type;
+    return node;
   }
   function peg$f141(pre_access, macro, post_access, decl) {
-        decl.macro = macro;
-        decl.access = pre_access ? pre_access : post_access;
-        return decl;
+    decl.macro = macro;
+    decl.access = pre_access ? pre_access : post_access;
+    return decl;
   }
   function peg$f142(name, params) {
-        let node = Compound(range(), n.ConstructorDecl, null);
-        node.name = name;
-        node.parameters = params;
-        return node;
+    let node = Compound(range(), n.ConstructorDecl, null);
+    node.name = name;
+    node.parameters = params;
+    return node;
   }
   function peg$f143() {    return Identifier(range(), text());  }
   function peg$f144(name) {
-        let node = Compound(range(), n.DestructorDecl, null);
-        node.name = name;
-        return node;
+    let node = Compound(range(), n.DestructorDecl, null);
+    node.name = name;
+    return node;
   }
   function peg$f145(pre_access, macro, post_access, decl) {
-        decl.macro = macro;
-        decl.access = pre_access ? pre_access : post_access;
-        return decl;
+    decl.macro = macro;
+    decl.access = pre_access ? pre_access : post_access;
+    return decl;
   }
   function peg$f146() {    return Identifier(range(), text());  }
   function peg$f147(name, list) {
-            let node = Compound(range(), n.AccessDeclaration, null);
-            node.name = name;
-            node.classList = list ? list : [];
-            return node;
+    let node = Compound(range(), n.AccessDeclaration, null);
+    node.name = name;
+    node.classList = list ? list : [];
+    return node;
   }
   function peg$f148(body) {
-        if (!body)
-            return null;
-        return ExtendedCompound(range(), body);
+    if (!body)
+        return null;
+    return ExtendedCompound(range(), body);
   }
   function peg$f149(head, tail) {
-        return [ head ].concat(tail);
+    return [ head ].concat(tail);
   }
   function peg$f150() {    return Identifier(range(), text());  }
   function peg$f151(name, mods) {
-        let node = Compound(range(), n.AccessClass, null);
-        node.className = name;
-        node.mods = mods;
-        return node;
+    let node = Compound(range(), n.AccessClass, null);
+    node.className = name;
+    node.mods = mods;
+    return node;
   }
   function peg$f152(head, tail) {
-        return [ head ].concat(tail);
+    return [ head ].concat(tail);
   }
   function peg$f153(name) {
-        return Compound(range(), n.IncompleteAccessSpecifier, [name]);
+    return Compound(range(), n.IncompleteAccessSpecifier, [name]);
   }
   function peg$f154(expr) {
-        return Compound(range(), n.DefaultStatement, [expr]);
+    return Compound(range(), n.DefaultStatement, [expr]);
   }
   function peg$f155(head, tail) {
-        return Compound(range(), n.EnumValueList, [head].concat(tail));
+    return Compound(range(), n.EnumValueList, [head].concat(tail));
   }
   function peg$f156(comment, name, expr, meta) {
-        let node = Compound(range(), n.EnumValue, null);
-        node.name = name;
-        node.documentation = comment;
-        node.value = expr;
-        node.meta = meta;
-        return node;
+    let node = Compound(range(), n.EnumValue, null);
+    node.name = name;
+    node.documentation = comment;
+    node.value = expr;
+    node.meta = meta;
+    return node;
   }
   let peg$currPos = options.peg$currPos | 0;
   let peg$savedPos = peg$currPos;
